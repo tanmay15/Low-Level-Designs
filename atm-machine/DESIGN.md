@@ -91,16 +91,17 @@ IDLE ──[insertCard()]──► CARD_INSERTED ──[enterPIN() ✓]──►
 |--------|------|-------------|
 | `cardNumber` | String | identifier |
 | `accountId` | String | links to Bank Account |
-| `locked` | boolean | set true after 3 wrong PINs |
+| `pin` (private) | String | card-specific PIN — never exposed |
+| `wrongAttempts` | int | per-card counter, reset to 0 on correct PIN |
+| `locked` | boolean | set true after 3 wrong PINs — only this card locked |
+| `checkPin(entered)` | boolean | compare with stored PIN |
 
-### `Account` (Bank-owned, private state)
+### `Account` (Bank-owned, purely financial)
 
 | Member | Type | Description |
 |--------|------|-------------|
 | `balance` (private) | int | in paise — no floating point |
-| `pin` (private) | String | never exposed outside Account |
-| `wrongAttempts` | int | reset to 0 on correct PIN |
-| `checkPin(entered)` | boolean | compare with stored PIN |
+| `getBalance()` | int | read balance |
 | `debit(amount)` | boolean | returns false if insufficient |
 | `credit(amount)` | void | adds to balance |
 
@@ -179,8 +180,10 @@ Same role as `ParkingTicket` (Parking Lot) and `BorrowRecord` (Library Managemen
 | Decision | Choice | Reason |
 |----------|--------|--------|
 | Balance stored in paise (int) | Yes | Never use float for money — floating point precision errors |
-| PIN stored in Account (private) | Yes | Bank owns the data; ATM never sees the raw PIN |
-| `wrongAttempts` on Account, `locked` on Card | Split | Attempts are account-level; locking is card-level (a card can be replaced) |
+| PIN on Card (private), not Account | Yes | One account can have multiple cards, each with its own PIN. Locking card A must not affect card B. |
+| `wrongAttempts` on Card | Yes | Attempts are per-card, not per-account — consistent with PIN being on Card |
+| `locked` on Card | Yes | Locking is physical-card-level — card is replaced, account continues |
+| Account has NO PIN logic | Yes | Account is purely financial: balance, debit, credit. Clean separation. |
 | `MIN_CASH_RESERVE` on ATM | Yes | ATM must always keep enough cash for smaller withdrawals |
 | Failed transactions still logged | Yes | Audit trail must be complete — failures are as important as successes |
 | `ejectCard()` works from any state | Yes | Safety — user must always be able to get their card back |
@@ -203,6 +206,6 @@ Same role as `ParkingTicket` (Parking Lot) and `BorrowRecord` (Library Managemen
 
 1. **Two actors**: Cardholder at the ATM, Bank as the external authority. ATM delegates all financial operations to Bank — it never stores account data itself.
 
-2. **Card lock on Account, not ATM**: `wrongAttempts` lives on `Account` (not ATM) because it's a per-account property. `locked` lives on `Card` because locking is physical-card-level.
+2. **PIN and `wrongAttempts` on Card, not Account**: One account can have multiple cards, each with its own PIN. Locking card A after 3 wrong PINs must NOT affect card B. Account owns only financial data (balance, debit, credit) — no PIN logic at all.
 
 3. **Money always in paise (int), never float**: `500000` paise = ₹5000. Integer arithmetic eliminates floating-point precision issues for all money operations.

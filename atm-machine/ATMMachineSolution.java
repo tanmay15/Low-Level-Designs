@@ -18,6 +18,12 @@
 // Out of scope: network calls to real bank, card skimming prevention, receipt
 //   printing hardware, card blocking across multiple ATMs
 //
+// KEY DESIGN DECISION — PIN on Card, not Account:
+//   One account can have multiple cards (primary + supplementary).
+//   Each card has its own PIN and wrong-attempt counter.
+//   Locking card A after 3 wrong PINs does NOT affect card B on the same account.
+//   Account owns only financial data: balance, debit, credit.
+//
 // COMPARED TO VENDING MACHINE:
 //   - Vending Machine: one actor, money in int (cents)
 //   - ATM: two actors (cardholder + Bank), PIN validation, card lockout,
@@ -41,36 +47,41 @@ enum TransactionStatus { SUCCESS, FAILED }
 // =============================================================================
 
 // ── Card ──────────────────────────────────────────────────────────────────────
+// PIN and wrong-attempt tracking live here because they are card-level:
+//   - One account can have multiple cards, each with its own PIN.
+//   - Locking card A after 3 wrong PINs should NOT affect card B on the same account.
 class Card {
-    public String cardNumber;
-    public String accountId;
-    public boolean locked;  // locked after 3 wrong PIN attempts
+    public String  cardNumber;
+    public String  accountId;
+    private String pin;          // card-specific PIN
+    public int     wrongAttempts; // per-card counter — reset on correct PIN
+    public boolean locked;        // set true after 3 wrong attempts
 
-    public Card(String cardNumber, String accountId) {
-        this.cardNumber = cardNumber;
-        this.accountId  = accountId;
-        this.locked     = false;
+    public Card(String cardNumber, String accountId, String pin) {
+        this.cardNumber    = cardNumber;
+        this.accountId     = accountId;
+        this.pin           = pin;
+        this.wrongAttempts = 0;
+        this.locked        = false;
     }
+
+    public boolean checkPin(String entered) { return pin.equals(entered); }
 }
 
 // ── Account ───────────────────────────────────────────────────────────────────
 // Owned by the Bank, not the ATM. ATM never stores account data directly.
+// Account is purely financial: balance, debit, credit. No PIN logic here.
 class Account {
     public String id;
-    private int   balance;      // in paise/cents (integer, no floats)
-    private String pin;
-    public int    wrongAttempts;
+    private int   balance;   // in paise/cents (integer, no floats)
 
-    public Account(String id, int initialBalance, String pin) {
-        this.id           = id;
-        this.balance      = initialBalance;
-        this.pin          = pin;
-        this.wrongAttempts = 0;
+    public Account(String id, int initialBalance) {
+        this.id      = id;
+        this.balance = initialBalance;
     }
 
-    public int    getBalance()              { return balance; }
-    public boolean checkPin(String entered) { return pin.equals(entered); }
-    public void   credit(int amount)        { balance += amount; }
+    public int     getBalance()      { return balance; }
+    public void    credit(int amount){ balance += amount; }
     public boolean debit(int amount) {
         if (balance < amount) return false;
         balance -= amount;
@@ -122,20 +133,17 @@ class Bank {
     public Card    getCard(String cardNumber)  { return cards.get(cardNumber); }
     public Account getAccount(String accountId){ return accounts.get(accountId); }
 
-    // Returns true if PIN correct; false + increments wrongAttempts otherwise.
-    // Locks card after 3 failures.
+    // Returns true if PIN correct; false + increments card.wrongAttempts otherwise.
+    // Locks the card (not the account) after 3 failures — other cards on same account unaffected.
     public boolean validatePin(Card card, String enteredPin) {
-        Account account = accounts.get(card.accountId);
-        if (account == null) return false;
-
-        if (account.checkPin(enteredPin)) {
-            account.wrongAttempts = 0;
+        if (card.checkPin(enteredPin)) {
+            card.wrongAttempts = 0;   // reset on success
             return true;
         }
 
-        account.wrongAttempts++;
-        System.out.println("  [BANK] Wrong PIN. Attempts: " + account.wrongAttempts + "/3");
-        if (account.wrongAttempts >= 3) {
+        card.wrongAttempts++;
+        System.out.println("  [BANK] Wrong PIN. Attempts: " + card.wrongAttempts + "/3");
+        if (card.wrongAttempts >= 3) {
             card.locked = true;
             System.out.println("  [BANK] Card " + card.cardNumber + " LOCKED after 3 wrong attempts");
         }
@@ -310,13 +318,15 @@ public class ATMMachineSolution {
         // ── Setup Bank ────────────────────────────────────────────────────────
         Bank bank = new Bank();
 
-        Account acc1 = new Account("ACC-1", 500000, "1234"); // ₹5000
-        Account acc2 = new Account("ACC-2", 200000, "9999"); // ₹2000
+        Account acc1 = new Account("ACC-1", 500000); // ₹5000
+        Account acc2 = new Account("ACC-2", 200000); // ₹2000
         bank.addAccount(acc1);
         bank.addAccount(acc2);
 
-        Card card1 = new Card("CARD-1001", "ACC-1");
-        Card card2 = new Card("CARD-1002", "ACC-2");
+        // PIN now lives on Card — each card has its own PIN.
+        // acc1 could have two cards with different PINs; locking one won't affect the other.
+        Card card1 = new Card("CARD-1001", "ACC-1", "1234");
+        Card card2 = new Card("CARD-1002", "ACC-2", "9999");
         bank.addCard(card1);
         bank.addCard(card2);
 
