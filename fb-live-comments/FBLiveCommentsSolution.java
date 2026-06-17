@@ -8,22 +8,20 @@
 //   2. Viewers join and leave the stream
 //   3. Viewers post comments in real time
 //   4. All active viewers receive every new comment (fan-out)
-//   5. Multiple consumers receive comments: UI display, moderation, analytics
-//   6. Host can end the stream — all listeners notified
-//   7. Query recent N comments from a stream
+//   5. Host ends the stream — all viewers notified
+//   6. Query recent N comments from a stream
 //
 // Non-Functional:
-//   - Observer pattern: adding a new comment consumer requires zero changes
-//     to the ingestion logic
-//   - Fan-out is O(listeners) per comment — acceptable for in-memory LLD
+//   - Fan-out is O(viewers) per comment
+//   - Viewer must join before posting a comment
 //
 // Out of scope: real-time WebSocket delivery, comment pinning, likes on comments,
-//   banning users, replay after stream ends, comment pagination
+//   banning users, stream replay, moderation, analytics
 //
-// KEY INSIGHT — Observer fan-out:
-//   postComment() → for each listener → listener.onComment(comment)
-//   New consumer (e.g. ML toxicity checker) = implement CommentListener + subscribe().
-//   Zero changes to LiveCommentService.
+// KEY INSIGHT:
+//   Viewer IS the observer. postComment() fans out to all viewers via
+//   viewer.receiveComment(). No separate listener abstraction needed.
+//   In production: receiveComment() would push over a WebSocket connection.
 // =============================================================================
 
 import java.util.*;
@@ -86,73 +84,27 @@ class LiveComment {
     }
 }
 
+// ── Viewer ────────────────────────────────────────────────────────────────────
+// A viewer is the observer. receiveComment() simulates a WebSocket push to
+// their screen. In production this would be an async push over the network.
+class Viewer {
+    public String userId;
+    public String streamId;
+    public long   joinedAt;
 
-// =============================================================================
-// OBSERVER PATTERN — CommentListener
-// =============================================================================
-// Any team can subscribe to live comments without modifying LiveCommentService.
-
-interface CommentListener {
-    void onComment(LiveComment comment);
-    void onStreamEnd(String streamId);
-}
-
-// ── ViewerDisplay ─────────────────────────────────────────────────────────────
-// What the viewer sees on screen. Each viewer has their own display instance.
-class ViewerDisplay implements CommentListener {
-    private String viewerId;
-
-    public ViewerDisplay(String viewerId) { this.viewerId = viewerId; }
-
-    @Override
-    public void onComment(LiveComment comment) {
-        System.out.println("    [SCREEN:" + viewerId + "] " + comment);
+    public Viewer(String userId, String streamId) {
+        this.userId    = userId;
+        this.streamId  = streamId;
+        this.joinedAt  = System.currentTimeMillis();
     }
 
-    @Override
-    public void onStreamEnd(String streamId) {
-        System.out.println("    [SCREEN:" + viewerId + "] Stream ended.");
-    }
-}
-
-// ── ModerationConsumer ────────────────────────────────────────────────────────
-// Flags comments with banned words. Shared across all viewers (one instance).
-class ModerationConsumer implements CommentListener {
-    private static final List<String> BANNED = Arrays.asList("spam", "hate", "abuse");
-
-    @Override
-    public void onComment(LiveComment comment) {
-        for (String word : BANNED) {
-            if (comment.content.toLowerCase().contains(word)) {
-                System.out.println("    [MODERATION] ⚠ Flagged " + comment.id
-                        + ": contains \"" + word + "\"");
-                return;
-            }
-        }
+    // Called on every new comment — fan-out target
+    public void receiveComment(LiveComment comment) {
+        System.out.println("  [SCREEN:" + userId + "] " + comment);
     }
 
-    @Override
-    public void onStreamEnd(String streamId) { /* cleanup moderation state if needed */ }
-}
-
-// ── AnalyticsConsumer ─────────────────────────────────────────────────────────
-// Counts comments per stream for engagement metrics.
-class AnalyticsConsumer implements CommentListener {
-    private Map<String, Integer> commentCount = new HashMap<>();
-
-    @Override
-    public void onComment(LiveComment comment) {
-        commentCount.merge(comment.streamId, 1, Integer::sum);
-    }
-
-    @Override
-    public void onStreamEnd(String streamId) {
-        System.out.println("    [ANALYTICS] Stream " + streamId
-                + " ended with " + commentCount.getOrDefault(streamId, 0) + " comments");
-    }
-
-    public int getCommentCount(String streamId) {
-        return commentCount.getOrDefault(streamId, 0);
+    public void onStreamEnd() {
+        System.out.println("  [SCREEN:" + userId + "] Stream has ended.");
     }
 }
 
@@ -160,19 +112,12 @@ class AnalyticsConsumer implements CommentListener {
 // =============================================================================
 // LIVE COMMENT SERVICE
 // =============================================================================
-// Central service managing stream lifecycle, viewer joins, and comment fan-out.
-//
-// Data structures:
-//   streams:   Map<streamId, LiveStream>
-//   comments:  Map<streamId, List<LiveComment>>   — append-only comment log
-//   viewers:   Map<streamId, Set<userId>>          — current active viewers
-//   listeners: Map<streamId, List<CommentListener>>— Observer subscriptions
 
 class LiveCommentService {
-    private Map<String, LiveStream>              streams   = new HashMap<>();
-    private Map<String, List<LiveComment>>       comments  = new HashMap<>();
-    private Map<String, Set<String>>             viewers   = new HashMap<>();
-    private Map<String, List<CommentListener>>   listeners = new HashMap<>();
+    private Map<String, LiveStream>       streams        = new HashMap<>();
+    private Map<String, List<LiveComment>> comments      = new HashMap<>(); // streamId → comment log
+    private Map<String, List<Viewer>>     viewers        = new HashMap<>(); // streamId → active viewers
+    private Map<String, Viewer>           viewerIndex    = new HashMap<>(); // userId+streamId → Viewer
 
     private int streamCounter  = 0;
     private int commentCounter = 0;
@@ -187,8 +132,7 @@ class LiveCommentService {
 
         streams.put(streamId, stream);
         comments.put(streamId, new ArrayList<>());
-        viewers.put(streamId, new HashSet<>());
-        listeners.put(streamId, new ArrayList<>());
+        viewers.put(streamId, new ArrayList<>());
 
         System.out.println("[STREAM] " + hostId + " started: \"" + title
                 + "\" [" + streamId + "]");
@@ -202,9 +146,9 @@ class LiveCommentService {
         stream.status  = StreamStatus.ENDED;
         stream.endedAt = System.currentTimeMillis();
 
-        // Notify all listeners stream has ended
-        for (CommentListener listener : listeners.getOrDefault(streamId, new ArrayList<>())) {
-            listener.onStreamEnd(streamId);
+        // Notify all viewers the stream has ended
+        for (Viewer viewer : viewers.getOrDefault(streamId, new ArrayList<>())) {
+            viewer.onStreamEnd();
         }
         System.out.println("[STREAM] " + streamId + " ENDED | total comments: "
                 + comments.get(streamId).size());
@@ -212,39 +156,42 @@ class LiveCommentService {
 
     // ── Viewer management ─────────────────────────────────────────────────────
 
-    // Each viewer registers their own display listener on join.
-    // Shared listeners (moderation, analytics) can be added separately via subscribe().
-    public void joinStream(String userId, String streamId, CommentListener display) {
+    public Viewer joinStream(String userId, String streamId) {
         LiveStream stream = streams.get(streamId);
         if (stream == null || stream.status != StreamStatus.LIVE)
             throw new RuntimeException("Stream not live");
 
-        viewers.get(streamId).add(userId);
-        listeners.get(streamId).add(display);
+        String key = userId + ":" + streamId;
+        if (viewerIndex.containsKey(key)) return viewerIndex.get(key); // already joined
+
+        Viewer viewer = new Viewer(userId, streamId);
+        viewers.get(streamId).add(viewer);
+        viewerIndex.put(key, viewer);
 
         System.out.println("[VIEWER] " + userId + " joined " + streamId
-                + " | total viewers: " + viewers.get(streamId).size());
+                + " | viewers: " + viewers.get(streamId).size());
+        return viewer;
     }
 
     public void leaveStream(String userId, String streamId) {
-        viewers.getOrDefault(streamId, new HashSet<>()).remove(userId);
-        System.out.println("[VIEWER] " + userId + " left " + streamId
-                + " | total viewers: " + viewers.get(streamId).size());
+        String key    = userId + ":" + streamId;
+        Viewer viewer = viewerIndex.remove(key);
+        if (viewer != null) {
+            viewers.get(streamId).remove(viewer);
+            System.out.println("[VIEWER] " + userId + " left " + streamId
+                    + " | viewers: " + viewers.get(streamId).size());
+        }
     }
 
-    // Subscribe a shared listener (moderation, analytics) — not tied to a specific viewer
-    public void subscribe(String streamId, CommentListener listener) {
-        listeners.getOrDefault(streamId, new ArrayList<>()).add(listener);
-    }
-
-    // ── Comment posting ───────────────────────────────────────────────────────
-    // Fan-out: one comment → all listeners notified synchronously.
+    // ── Comment posting — fan-out to all viewers ──────────────────────────────
 
     public LiveComment postComment(String authorId, String streamId, String content) {
         LiveStream stream = streams.get(streamId);
         if (stream == null || stream.status != StreamStatus.LIVE)
             throw new RuntimeException("Cannot comment on a stream that is not live");
-        if (!viewers.get(streamId).contains(authorId))
+
+        String key = authorId + ":" + streamId;
+        if (!viewerIndex.containsKey(key))
             throw new RuntimeException("Must join stream before commenting: " + authorId);
 
         String      commentId = "CMT-" + (++commentCounter);
@@ -253,9 +200,9 @@ class LiveCommentService {
 
         System.out.println("[COMMENT] " + authorId + ": \"" + content + "\"");
 
-        // Fan-out to all subscribed listeners
-        for (CommentListener listener : listeners.get(streamId)) {
-            listener.onComment(comment);
+        // Fan-out to all active viewers
+        for (Viewer viewer : viewers.get(streamId)) {
+            viewer.receiveComment(comment);
         }
 
         return comment;
@@ -270,7 +217,7 @@ class LiveCommentService {
     }
 
     public int getViewerCount(String streamId) {
-        return viewers.getOrDefault(streamId, new HashSet<>()).size();
+        return viewers.getOrDefault(streamId, new ArrayList<>()).size();
     }
 }
 
@@ -285,66 +232,43 @@ public class FBLiveCommentsSolution {
 
         LiveCommentService service = new LiveCommentService();
 
-        // Shared consumers — subscribe once, receive all comments on the stream
-        ModerationConsumer moderation = new ModerationConsumer();
-        AnalyticsConsumer  analytics  = new AnalyticsConsumer();
-
         // ── Host starts a stream ───────────────────────────────────────────────
         LiveStream stream   = service.startStream("HOST-1", "Cooking with Alice");
         String     streamId = stream.id;
-
-        // Subscribe shared listeners to the stream
-        service.subscribe(streamId, moderation);
-        service.subscribe(streamId, analytics);
         System.out.println();
 
-        // ── Viewers join with their own display ───────────────────────────────
+        // ── Viewers join ───────────────────────────────────────────────────────
         System.out.println("── Viewers Joining ──");
-        service.joinStream("U2", streamId, new ViewerDisplay("U2")); // Bob
-        service.joinStream("U3", streamId, new ViewerDisplay("U3")); // Charlie
-        service.joinStream("U4", streamId, new ViewerDisplay("U4")); // Diana
+        service.joinStream("U2", streamId); // Bob joins
+        service.joinStream("U3", streamId); // Charlie joins
+        service.joinStream("U4", streamId); // Diana joins
         System.out.println();
 
-        // ── Comments flow — fan-out to all listeners ──────────────────────────
-        System.out.println("── Live Comments ──");
+        // ── Comments — fan-out to all viewers ─────────────────────────────────
+        System.out.println("── Live Comments (all viewers receive each comment) ──");
         service.postComment("U2", streamId, "This looks delicious!");
         System.out.println();
 
         service.postComment("U3", streamId, "What's the recipe?");
         System.out.println();
 
-        service.postComment("U4", streamId, "This is spam!"); // triggers moderation
-        System.out.println();
-
-        service.postComment("U2", streamId, "I hate this show!"); // triggers moderation
-        System.out.println();
-
-        // ── Viewer leaves ─────────────────────────────────────────────────────
-        System.out.println("── Viewer Leaves ──");
+        // ── Viewer leaves mid-stream ───────────────────────────────────────────
+        System.out.println("── Charlie Leaves ──");
         service.leaveStream("U3", streamId);
         System.out.println();
 
-        // ── New consumer added at runtime (no code change in service) ─────────
-        System.out.println("── Adding new consumer at runtime ──");
-        service.subscribe(streamId, comment ->
-                System.out.println("    [ML-TOXICITY] Analysing: \"" + comment.content + "\""));
-
-        service.postComment("U4", streamId, "Now ML checks this too!");
+        // ── Comment after Charlie left — only U2 and U4 receive it ────────────
+        System.out.println("── Comment after Charlie left ──");
+        service.postComment("U4", streamId, "Missing Charlie already!");
         System.out.println();
 
-        // ── Recent comments query ─────────────────────────────────────────────
-        System.out.println("── Recent 3 Comments ──");
-        service.getRecentComments(streamId, 3).forEach(System.out::println);
+        // ── Recent comments ────────────────────────────────────────────────────
+        System.out.println("── Recent 2 Comments ──");
+        service.getRecentComments(streamId, 2).forEach(System.out::println);
         System.out.println();
 
-        // ── Stream ends — all listeners notified ──────────────────────────────
+        // ── Stream ends — all remaining viewers notified ───────────────────────
         System.out.println("── Stream Ends ──");
         service.endStream(streamId);
-        System.out.println();
-
-        // ── Analytics summary ─────────────────────────────────────────────────
-        System.out.println("── Analytics ──");
-        System.out.println("Total comments on " + streamId + ": "
-                + analytics.getCommentCount(streamId));
     }
 }
