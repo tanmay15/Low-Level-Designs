@@ -75,7 +75,7 @@ interface RateLimiter {
 // Lazy refill: tokens are added only when a request arrives — no background thread.
 
 class TokenBucketRateLimiter implements RateLimiter {
-    private double capacity;
++    private double capacity;
     private double refillRatePerMs; // tokens added per millisecond
     private Map<String, BucketState> buckets;
 

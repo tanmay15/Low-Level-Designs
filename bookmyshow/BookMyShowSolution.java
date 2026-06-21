@@ -170,6 +170,9 @@ class ShowSeat {
         this.status = ShowSeatStatus.LOCKED;
     }
 
+
+
+
     public void book() {
         if (this.status != ShowSeatStatus.LOCKED) {
             throw new RuntimeException("Seat " + seat.id + " must be locked before booking");
