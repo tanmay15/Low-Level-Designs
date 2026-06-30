@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Compile & Run Gym Booking",
+            "type": "shell",
+            "command": "javac enums/*.java models/*.java repository/*.java service/*.java Main.java && java Main",
+            "options": {
+                "cwd": "${fileDirname}/.."
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": "$javac"
+        }
+    ]
+}
