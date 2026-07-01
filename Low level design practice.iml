@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/ad-click-aggregator" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/amazon-locker" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/atm-machine" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bookmyshow" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/carpooling" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/chess" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cricket-scoreboard" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/elevator-system" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/fb-live-comments" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/food-delivery" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/food-delivery-reviews" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/google-drive" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/gym-booking" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/hotel-booking" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/inventory-management" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/job-scheduler" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/library-management" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/logger" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lru-cache" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/metrics-monitoring" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/notification-service" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/online-auction" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/parking-lot" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/promise" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rate-limiter" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ride-sharing" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/social-media-feed" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/splitwise" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/stack-overflow" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/stock-broker" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tic-tac-toe" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tinder" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/traffic-light" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/url-shortener" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vending-machine" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/web-crawler" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/whatsapp" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "ParkingLotSolution",
+            "request": "launch",
+            "mainClass": "ParkingLotSolution",
+            "projectName": "Low level design practice_82340bc0"
+        },
+        {
+            "type": "java",
+            "name": "StockBrokerSolution",
+            "request": "launch",
+            "mainClass": "StockBrokerSolution",
+            "projectName": "Low level design practice_82340bc0"
+        },
+        {
+            "type": "java",
+            "name": "Run Current File",
+            "request": "launch",
+            "mainClass": "${fileBasenameNoExtension}",
+            "classPaths": [
+                "${fileDirname}"
+            ],
+            "sourcePaths": [
+                "${fileDirname}"
+            ]
+        }
+    ]
+}

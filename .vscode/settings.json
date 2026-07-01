@@ -1,0 +1,11 @@
+{
+    // Each subfolder is its own independent Java source — prevents duplicate class errors
+    "java.project.sourcePaths": [
+        "stock-broker",
+        "parking-lot"
+    ],
+    "java.errors.incompleteClasspath.severity": "ignore",
+    "java.compile.nullAnalysis.mode": "disabled",
+    // Run config: always run the file in the active editor, not the whole project
+    "java.debug.settings.onBuildFailureProceed": true
+}
